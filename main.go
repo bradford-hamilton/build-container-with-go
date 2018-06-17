@@ -29,7 +29,7 @@ func run() {
 	must(cmd.Run())
 }
 
-func must(err, error) {
+func must(err error) {
 	if err != nil {
 		panic(err)
 	}

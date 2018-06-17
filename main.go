@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"syscall"
 )
 
 // docker run <container> cmd args
@@ -13,20 +14,43 @@ func main() {
 	switch os.Args[1] {
 	case "run":
 		run()
+	case "child":
+		child()
 	default:
 		panic("wtf mate?")
 	}
 }
 
 func run() {
-	fmt.Printf("Running %v\n", os.Args[2:])
+	cmd := exec.Command("/proc/self/exe", append([]string{"child"}, os.Args[2:]...)...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID,
+	}
+
+	must(cmd.Run())
+}
+
+func child() {
+	fmt.Printf("Running %v as PID \n", os.Args[2:], os.Getpid())
 
 	cmd := exec.Command(os.Args[2], os.Args[3:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
+	must(syscall.Sethostname([]byte("container")))
+	must(syscall.Chroot("/home/bradford/ubuntufs"))
+	must(os.Chdir("/"))
+	must(syscall.Mount("proc", "proc", "proc", 0, ""))
+	must(syscall.Mount("thing", "mytemp", "tmpfs", 0, ""))
+
 	must(cmd.Run())
+
+	must(syscall.Unmount("proc", 0))
+	must(syscall.Unmount("thing", 0))
 }
 
 func must(err error) {
